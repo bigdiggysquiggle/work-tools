@@ -1,0 +1,5 @@
+#!/bin/bash
+if [ ! -f "Listing.xlsx" ]; then
+	cp "$HOME/Work/Blank.xlsx" "Listing.xlsx"
+fi
+libreoffice "Listing.xlsx"

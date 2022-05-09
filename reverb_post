@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+
+import os
+import re
+import sys
+import getpass
+import shelve
+import openpyxl
+import time
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+
+if len(sys.argv) == 1:
+	print("Usage: reverb_listing [directory paths]")
+	exit()
+options = Options()
+#options.headless = True
+CREDS_LOC = os.path.expandvars("$HOME/Work/login.shelf")
+driver = webdriver.Firefox(options=options, service_log_path='/dev/null')
+driver.get("https://reverb.com/signin")
+if driver.current_url == "https://reverb.com/signin":
+	if os.path.exists(CREDS_LOC) == False:
+		CREDS = shelve.open(CREDS_LOC, 'c')
+		print("Enter login email")
+		CREDS['login'] = input()
+		CREDS['pass'] = getpass.getpass(prompt="Enter login password:")
+	else:
+		CREDS = shelve.open(CREDS_LOC, 'r')
+	driver.find_element(By.XPATH, '//*[@id="user_session_login"]').send_keys(CREDS['login'])
+	driver.find_element(By.XPATH, '//*[@id="user_session_password"]').send_keys(CREDS['pass'])
+	driver.find_element(By.XPATH, '/html/body/main/section/div[3]/form/div[3]/div/input').click()
+
+for DIR in sys.argv[1:]:
+	if os.path.exists(DIR) == False:
+		print("Error: " + DIR + " not found. Skipping")
+		continue
+	if os.path.isdir(DIR) == False:
+		print("Error: " + DIR + " is not a directory")
+	continue
+	PWD = os.getcwd()
+	os.chdir(DIR)
+	if os.path.exists("Listing.xlsx") == False:
+		print("Error: Listing.xlsx not found. Skipping item")
+		os.chdir(PWD)
+		continue
+	WB = openpyxl.load_workbook('Listing.xlsx')
+	SHEET=WB['Sheet1']
+	driver.get("https://reverb.com/sell?blank=")
+
+# Entering simple values
+	XPATHS = ['//*[@id="product_make"]', '//*[@id="product_model"]', '//*[@id="product-condition"]', '//*[@id="product_year"]', '//*[@id="product_finish"]', '//*[@id="product_title"]', '//*[@id="product_price"]', '//*[@id="product_video_link_attributes_link"]']
+	CELLNUM = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B12']
+
+	for i in range(0, len(XPATHS)):
+		ENTRY = SHEET[CELLNUM[i]].value
+		print(CELLNUM[i])
+		if ENTRY:
+			print(XPATHS[i])
+			print(ENTRY)
+			driver.find_element(By.XPATH, XPATHS[i]).send_keys(ENTRY)
+		print()
+
+# Entering more complicated values
+
+	XPATHS = ['/html/body/main/section/div[1]/div[1]/form/div[1]/div[1]/div/div[2]/div[9]/div[2]/div/a/span', '/html/body/main/section/div[1]/div[1]/form/div[1]/div[1]/div/div[2]/div[9]/div[2]/div/div/div/input', '/html/body/main/section/div[1]/div[1]/form/div[1]/div[1]/div/div[2]/div[11]/div/div/div[2]/div/div/a/span', '/html/body/main/section/div[1]/div[1]/form/div[1]/div[1]/div/div[2]/div[11]/div/div/div[2]/div/div/div/div/input']
+
+	CELLNUM = ['B8', 'B10']
+
+	for i in range(0, 1):
+		ENTRY = SHEET[CELLNUM[i]].value
+		if ENTRY:
+			driver.find_element(By.XPATH, XPATHS[i*2]).click()
+			ELEM = driver.find_element(By.XPATH, XPATHS[i*2+1])
+			ELEM.send_keys(ENTRY)
+			ELEM.send_keys(Keys.ENTER)
+
+# Yes/No
+
+	CELLNUM = ['B9', 'B13', 'B14', 'B16']
+	CHECKVAL = ['No', 'No', 'No', 'Yes']
+	XPATHS = ['//*[@id="product_offers_enabled"]', '//*[@id="listingOffersShipping"]', '//*[@id="listingOffersLocalPickup"]', '//*[@id="product_sold_as_is"]']
+
+	for i in range(0, 3):
+		VAL = SHEET[CELLNUM[i]].value
+		if VAL and VAL == CHECKVAL[i]:
+			ELEM = driver.find_element(By.XPATH, XPATHS[i])
+			ELEM.send_keys(ENTRY)
+			ELEM.send_keys(Keys.ENTER).click()
+
+# Shipping cost
+	driver.find_element(By.XPATH, '//*[@id="product[shipping][rates][][rate]"]').send_keys(SHEET['B15'].value)
+	driver.find_element(By.XPATH, '/html/body/main/section/div[1]/div[1]/form/div[5]/div/div/div/div[2]/div[3]/div/div[2]/div/header/div[2]/button').click()
+
+# Upload images
+	DIR = os.listdir()
+	#change this to filter for picture extensions
+	FILTERED = list(filter(lambda F: re.search("jpg$|JPG$|jpeg$|JPEG$|png$|PNG$|gif$|GIF$", F), DIR))
+	LEN = len(FILTERED)
+	print(LEN)
+	for PIC in FILTERED:
+		print(PIC)
+		if PIC != r"^\." or PIC != r".*\.xlsx":
+			driver.find_element(By.XPATH, '/html/body/main/section/div[1]/div[1]/form/div[2]/div[1]/div/div[2]/div/div/div[2]/div/input').send_keys(os.getcwd() + '/' + PIC)
+	while len(driver.find_elements(By.XPATH, '/html/body/main/section/div[1]/div[1]/form/div[2]/div[1]/div/div[2]/div/div/div[2]/*')) < LEN:
+		time.sleep(1)
+
+# Entering description
+	print("do a describe")
+	driver.switch_to.frame(driver.find_element(By.XPATH, '/html/body/main/section/div[1]/div[1]/form/div[3]/div[1]/div/div[2]/div/div/div[2]/div[2]/iframe'))
+	driver.find_element(By.XPATH, '/html/body').send_keys(str(SHEET['B11'].value))
+	driver.switch_to.default_content()
+
+# Save for review
+	driver.find_element(By.XPATH, '/html/body/main/section/div[1]/div[1]/form/div[8]/div/input').click()
