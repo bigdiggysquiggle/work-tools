@@ -110,7 +110,19 @@ for DIR in sys.argv[1:]:
 # Entering description
 	print("do a describe")
 	driver.switch_to.frame(driver.find_element(By.XPATH, '/html/body/main/section/div[1]/div[1]/form/div[3]/div[1]/div/div[2]/div/div/div[2]/div[2]/iframe'))
-	driver.find_element(By.XPATH, '/html/body').send_keys(str(SHEET['B11'].value))
+	if SHEET['B11'].value:
+		DESC = str(SHEET['B11'].value)
+	# I know this isn't great practice and in a higher
+	# production environment where this matters, I
+	# would implement something buffered, however I
+	# peronally control the size of the input file so
+	# in my specific case this is a nonissue
+	elif os.path.exists('description.txt'):
+		with open('description.txt', 'r') as FILE:
+			DESC = FILE.read()
+	else:
+		DESC = ''
+	driver.find_element(By.XPATH, '/html/body').send_keys(DESC)
 	driver.switch_to.default_content()
 
 # Save for review
